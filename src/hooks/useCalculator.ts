@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useMemo } from 'react';
+import { useReducer, useMemo, useEffect } from 'react';
 import type {
   CalculatorState,
   CalculatorAction,
@@ -8,6 +8,8 @@ import type {
   Climb,
   WeightUnit
 } from '@/lib/types';
+
+const STORAGE_KEY = 'cycling-calculator-state';
 import {
   lbToKg,
   kgToLb,
@@ -26,8 +28,8 @@ import {
   DEFAULT_CASSETTE_ID
 } from '@/lib/data/gearing';
 
-// Initial state
-const initialState: CalculatorState = {
+// Default state
+const defaultState: CalculatorState = {
   unit: 'kg',
   riderWeight: DEFAULTS.RIDER_WEIGHT_KG,
   bikeWeight: DEFAULTS.BIKE_WEIGHT_KG,
@@ -41,6 +43,34 @@ const initialState: CalculatorState = {
   selectedChainringId: DEFAULT_CHAINRING_ID,
   selectedCassetteId: DEFAULT_CASSETTE_ID
 };
+
+// Load state from localStorage
+function loadState(): CalculatorState {
+  if (typeof window === 'undefined') return defaultState;
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Merge with defaults to handle any missing fields from older versions
+      return { ...defaultState, ...parsed };
+    }
+  } catch {
+    // Invalid JSON or other error, use defaults
+  }
+  return defaultState;
+}
+
+// Save state to localStorage
+function saveState(state: CalculatorState): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage full or unavailable
+  }
+}
 
 // Reducer
 function calculatorReducer(state: CalculatorState, action: CalculatorAction): CalculatorState {
@@ -159,8 +189,13 @@ function computeDerived(state: CalculatorState): CalculatorDerived {
 
 // Main hook
 export function useCalculator() {
-  const [state, dispatch] = useReducer(calculatorReducer, initialState);
+  const [state, dispatch] = useReducer(calculatorReducer, defaultState, loadState);
   const derived = useMemo(() => computeDerived(state), [state]);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    saveState(state);
+  }, [state]);
 
   const actions = {
     setUnit: (unit: WeightUnit) => dispatch({ type: 'SET_UNIT', unit }),
