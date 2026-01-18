@@ -1,12 +1,21 @@
 // Climb Types
+export type ClimbCategory = 'HC' | 'Cat 1' | 'Cat 2' | 'Cat 3' | 'Custom';
+
+export interface ElevationPoint {
+  distance: number;    // km from start
+  elevation: number;   // meters
+  gradient: number;    // percentage at this segment
+}
+
 export interface Climb {
   id: string;
   name: string;
   location: string;
   distance: number;    // kilometers
   elevation: number;   // meters gained
-  gradient: number;    // percentage (e.g., 8.1 for 8.1%)
-  category: string;    // "HC", "Cat 1", "Cat 2", etc. or "Custom"
+  gradient: number;    // average percentage (e.g., 8.1 for 8.1%)
+  category: ClimbCategory;
+  profile?: ElevationPoint[];  // elevation profile data (optional for custom climbs)
 }
 
 // Gearing Types
@@ -22,11 +31,25 @@ export interface CassetteOption {
   cogs: number[];
 }
 
+// Profile point with altitude effects data
+export interface ProfilePointData {
+  distance: number;      // km from start
+  elevation: number;     // meters
+  gradient: number;      // percentage
+  oxygenPercent: number; // % of sea level O2
+  powerPercent: number;  // % of sea level power available
+  effectivePower: number; // actual watts at this elevation
+  speedKmh: number;      // speed at this segment in km/h
+}
+
 // Calculation Result Types
 export interface ClimbResult {
   timeSeconds: number;
   avgSpeedKmh: number;
   velocity: number;  // m/s
+  vam: number;       // Vertical Ascent Meters per hour
+  profileData?: ProfilePointData[]; // altitude effects at each profile point
+  avgPowerPercent?: number; // average power available across the climb
 }
 
 // RPM Status Types
@@ -56,7 +79,7 @@ export interface PowerCategory {
 }
 
 // State Types
-export type WeightUnit = 'kg' | 'lb';
+export type UnitSystem = 'metric' | 'imperial';
 
 export interface CustomClimbState {
   distance: number | null;
@@ -65,14 +88,16 @@ export interface CustomClimbState {
 }
 
 export interface CalculatorState {
-  unit: WeightUnit;
-  riderWeight: number;
-  bikeWeight: number;
+  unitSystem: UnitSystem;
+  riderWeight: number;    // stored in kg internally
+  bikeWeight: number;     // stored in kg internally
   power: number;
   selectedClimbId: string;
   customClimb: CustomClimbState;
   selectedChainringId: string;
   selectedCassetteId: string;
+  altitude: number;      // meters above sea level
+  temperature: number;   // Celsius
 }
 
 export interface CalculatorDerived {
@@ -87,13 +112,22 @@ export interface CalculatorDerived {
   avgSpeedKmh: number;
 }
 
+// VAM Category Types
+export interface VamCategory {
+  minVam: number;
+  label: string;
+  textClass: string;
+}
+
 // Action Types
 export type CalculatorAction =
-  | { type: 'SET_UNIT'; unit: WeightUnit }
+  | { type: 'SET_UNIT_SYSTEM'; unitSystem: UnitSystem }
   | { type: 'SET_RIDER_WEIGHT'; weight: number }
   | { type: 'SET_BIKE_WEIGHT'; weight: number }
   | { type: 'SET_POWER'; power: number }
   | { type: 'SET_CLIMB'; climbId: string }
   | { type: 'SET_CUSTOM_CLIMB_FIELD'; field: 'distance' | 'elevation' | 'gradient'; value: number | null }
   | { type: 'SET_CHAINRING'; id: string }
-  | { type: 'SET_CASSETTE'; id: string };
+  | { type: 'SET_CASSETTE'; id: string }
+  | { type: 'SET_ALTITUDE'; altitude: number }
+  | { type: 'SET_TEMPERATURE'; temperature: number };

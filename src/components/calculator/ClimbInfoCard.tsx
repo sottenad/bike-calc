@@ -1,22 +1,26 @@
 'use client';
 
 import { Badge } from '@/components/ui';
-import { formatTime } from '@/lib/calculations';
-import type { Climb, ClimbResult } from '@/lib/types';
+import { ElevationProfile } from './ElevationProfile';
+import { formatTime, getVAMCategory, kmToMi, mToFt, kmhToMph } from '@/lib/calculations';
+import type { Climb, ClimbResult, UnitSystem } from '@/lib/types';
 
 interface ClimbInfoCardProps {
   climb: Climb | null;
   climbResult: ClimbResult | null;
   isCustom: boolean;
   isComplete: boolean;
+  unitSystem: UnitSystem;
 }
 
 export function ClimbInfoCard({
   climb,
   climbResult,
   isCustom,
-  isComplete
+  isComplete,
+  unitSystem
 }: ClimbInfoCardProps) {
+  const isImperial = unitSystem === 'imperial';
   const getBadgeVariant = (category: string): 'default' | 'hc' | 'custom' => {
     if (category === 'HC') return 'hc';
     if (category === 'Custom') return 'custom';
@@ -48,15 +52,15 @@ export function ClimbInfoCard({
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isComplete ? climb.distance.toFixed(1) : '—'}
+            {isComplete ? (isImperial ? kmToMi(climb.distance).toFixed(1) : climb.distance.toFixed(1)) : '—'}
           </div>
-          <div className="text-xs text-gray-500 dark:text-slate-400">km</div>
+          <div className="text-xs text-gray-500 dark:text-slate-400">{isImperial ? 'mi' : 'km'}</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isComplete ? climb.elevation.toLocaleString() : '—'}
+            {isComplete ? Math.round(isImperial ? mToFt(climb.elevation) : climb.elevation).toLocaleString() : '—'}
           </div>
-          <div className="text-xs text-gray-500 dark:text-slate-400">m elevation</div>
+          <div className="text-xs text-gray-500 dark:text-slate-400">{isImperial ? 'ft' : 'm'} elevation</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -66,7 +70,18 @@ export function ClimbInfoCard({
         </div>
       </div>
 
-      {/* Estimated Time */}
+      {/* Elevation Profile with Altitude Effects */}
+      {climb.profile && climb.profile.length >= 2 && (
+        <div className="mb-6">
+          <ElevationProfile
+            profile={climb.profile}
+            profileData={climbResult?.profileData}
+            unitSystem={unitSystem}
+          />
+        </div>
+      )}
+
+      {/* Estimated Time Result */}
       <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-600">
         <div className="text-center">
           <div className="text-sm text-gray-600 dark:text-slate-400 mb-1">Estimated Time</div>
@@ -75,10 +90,27 @@ export function ClimbInfoCard({
           </div>
           {climbResult && isComplete && (
             <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-              Avg speed: {climbResult.avgSpeedKmh.toFixed(1)} km/h
+              Avg speed: {isImperial
+                ? kmhToMph(climbResult.avgSpeedKmh).toFixed(1)
+                : climbResult.avgSpeedKmh.toFixed(1)} {isImperial ? 'mph' : 'km/h'}
             </div>
           )}
         </div>
+
+        {/* VAM Display */}
+        {climbResult && isComplete && (
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-600">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-slate-400">VAM:</span>
+              <span className={`text-lg font-semibold ${getVAMCategory(climbResult.vam).textClass}`}>
+                {Math.round(isImperial ? mToFt(climbResult.vam) : climbResult.vam).toLocaleString()} {isImperial ? 'ft' : 'm'}/h
+              </span>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                ({getVAMCategory(climbResult.vam).label})
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

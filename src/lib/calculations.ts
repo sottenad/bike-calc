@@ -1,12 +1,24 @@
-import type { Climb, ClimbResult, RpmStatusInfo, GearAnalysis } from './types';
-import { PHYSICS, RPM_THRESHOLDS, POWER_CATEGORIES, CONVERSIONS } from './constants';
+import type { Climb, ClimbResult, RpmStatusInfo, GearAnalysis, VamCategory, ProfilePointData } from './types';
+import { PHYSICS, RPM_THRESHOLDS, POWER_CATEGORIES, VAM_CATEGORIES, CONVERSIONS } from './constants';
 
 // ===== UNIT CONVERSIONS =====
 
+// Weight
 export const lbToKg = (lb: number): number => lb * CONVERSIONS.LB_TO_KG;
 export const kgToLb = (kg: number): number => kg * CONVERSIONS.KG_TO_LB;
+
+// Speed
 export const mpsToKmh = (mps: number): number => mps * CONVERSIONS.MPS_TO_KMH;
 export const kmhToMph = (kmh: number): number => kmh * CONVERSIONS.KMH_TO_MPH;
+export const mphToKmh = (mph: number): number => mph * CONVERSIONS.MPH_TO_KMH;
+
+// Distance
+export const kmToMi = (km: number): number => km * CONVERSIONS.KM_TO_MI;
+export const miToKm = (mi: number): number => mi * CONVERSIONS.MI_TO_KM;
+
+// Elevation
+export const mToFt = (m: number): number => m * CONVERSIONS.M_TO_FT;
+export const ftToM = (ft: number): number => ft * CONVERSIONS.FT_TO_M;
 
 // ===== POWER CALCULATIONS =====
 
@@ -24,35 +36,90 @@ export function getPowerCategory(wkg: number): string {
   return "Beginner";
 }
 
+// ===== ENVIRONMENTAL CALCULATIONS =====
+
+export function calculateAirDensity(altitudeM: number, temperatureC: number): number {
+  // International Standard Atmosphere formula
+  const T = temperatureC + 273.15; // Convert to Kelvin
+  const P0 = 101325; // Sea level pressure in Pa
+  // Barometric formula for pressure at altitude
+  const P = P0 * Math.pow(1 - 0.0065 * altitudeM / 288.15, 5.2561);
+  const M = 0.0289644; // Molar mass of air kg/mol
+  const R = 8.31447; // Universal gas constant J/(mol·K)
+  return (P * M) / (R * T);
+}
+
+/**
+ * Calculate power output reduction due to reduced oxygen at altitude
+ * Based on Bassett et al. (1999) formula for non-acclimatized athletes
+ * Formula: y = 0.178x³ – 1.43x² – 4.07x + 100 (x = altitude in km)
+ * Returns percentage of sea-level power available (e.g., 92 means 92% power)
+ */
+export function calculateAltitudePowerPercent(altitudeM: number): number {
+  const x = altitudeM / 1000; // Convert to kilometers
+  // Non-acclimatized formula (1-7 days at altitude)
+  const percent = 0.178 * Math.pow(x, 3) - 1.43 * Math.pow(x, 2) - 4.07 * x + 100;
+  // Clamp to reasonable range (minimum 60% at ~4000m+)
+  return Math.max(60, Math.min(100, percent));
+}
+
+/**
+ * Calculate approximate oxygen percentage relative to sea level
+ * At sea level, O2 is ~20.9% of air. The partial pressure drops with altitude.
+ */
+export function calculateOxygenPercent(altitudeM: number): number {
+  // Simplified barometric formula for relative oxygen availability
+  const P0 = 101325; // Sea level pressure
+  const P = P0 * Math.pow(1 - 0.0065 * altitudeM / 288.15, 5.2561);
+  return (P / P0) * 100;
+}
+
+// ===== VAM CALCULATIONS =====
+
+export function calculateVAM(elevationM: number, timeSeconds: number): number {
+  if (timeSeconds <= 0) return 0;
+  return (elevationM / timeSeconds) * 3600; // Convert to per-hour
+}
+
+export function getVAMCategory(vam: number): VamCategory {
+  for (const category of VAM_CATEGORIES) {
+    if (vam >= category.minVam) {
+      return category;
+    }
+  }
+  return VAM_CATEGORIES[VAM_CATEGORIES.length - 1];
+}
+
 // ===== CLIMB TIME CALCULATION =====
 
-export function calculateClimbTime(
-  powerWatts: number,
+/**
+ * Calculate velocity for a single segment given power, mass, gradient, and air density
+ */
+function calculateSegmentVelocity(
+  effectivePower: number,
   totalMassKg: number,
-  climb: Climb
-): ClimbResult {
-  const distanceM = climb.distance * 1000;
-  const gradientDecimal = climb.gradient / 100;
+  gradientPercent: number,
+  airDensity: number
+): number {
+  const gradientDecimal = gradientPercent / 100;
   const theta = Math.atan(gradientDecimal);
 
-  // Effective power after drivetrain losses
-  const effectivePower = powerWatts * PHYSICS.EFFICIENCY;
-
-  // Force components (excluding aerodynamic which depends on velocity)
   const gravityForce = totalMassKg * PHYSICS.GRAVITY * Math.sin(theta);
   const rollingForce = PHYSICS.CRR * totalMassKg * PHYSICS.GRAVITY * Math.cos(theta);
   const staticForce = gravityForce + rollingForce;
 
-  // Solve cubic equation using Newton-Raphson iteration
-  let velocity = effectivePower / staticForce; // Initial guess (ignoring aero)
+  // Initial guess (ignoring aero)
+  let velocity = effectivePower / staticForce;
+  if (velocity <= 0) velocity = 0.1; // Minimum velocity
 
+  // Newton-Raphson iteration
   for (let i = 0; i < 20; i++) {
-    const aeroForce = 0.5 * PHYSICS.CDA * PHYSICS.RHO * velocity * velocity;
+    const aeroForce = 0.5 * PHYSICS.CDA * airDensity * velocity * velocity;
     const totalForce = staticForce + aeroForce;
     const powerNeeded = totalForce * velocity;
 
     const f = powerNeeded - effectivePower;
-    const fPrime = staticForce + 1.5 * PHYSICS.CDA * PHYSICS.RHO * velocity * velocity;
+    const fPrime = staticForce + 1.5 * PHYSICS.CDA * airDensity * velocity * velocity;
 
     const delta = f / fPrime;
     velocity -= delta;
@@ -60,10 +127,99 @@ export function calculateClimbTime(
     if (Math.abs(delta) < 0.0001) break;
   }
 
-  const timeSeconds = distanceM / velocity;
-  const avgSpeedKmh = velocity * CONVERSIONS.MPS_TO_KMH;
+  return Math.max(0.1, velocity); // Minimum velocity of 0.1 m/s
+}
 
-  return { timeSeconds, avgSpeedKmh, velocity };
+/**
+ * Calculate climb time with segment-by-segment altitude effects
+ * Uses elevation profile to apply varying oxygen/power reduction at each segment
+ */
+export function calculateClimbTime(
+  powerWatts: number,
+  totalMassKg: number,
+  climb: Climb,
+  temperatureC: number = 15 // Default temperature for air density calc
+): ClimbResult {
+  const profile = climb.profile;
+
+  // If no profile data, use simple calculation with average gradient
+  if (!profile || profile.length < 2) {
+    const avgElevation = climb.elevation / 2; // Rough estimate
+    const airDensity = calculateAirDensity(avgElevation, temperatureC);
+    const powerPercent = calculateAltitudePowerPercent(avgElevation);
+    const effectivePower = powerWatts * PHYSICS.EFFICIENCY * (powerPercent / 100);
+
+    const velocity = calculateSegmentVelocity(effectivePower, totalMassKg, climb.gradient, airDensity);
+    const distanceM = climb.distance * 1000;
+    const timeSeconds = distanceM / velocity;
+    const avgSpeedKmh = velocity * CONVERSIONS.MPS_TO_KMH;
+    const vam = calculateVAM(climb.elevation, timeSeconds);
+
+    return { timeSeconds, avgSpeedKmh, velocity, vam, avgPowerPercent: powerPercent };
+  }
+
+  // Calculate segment-by-segment with altitude effects
+  let totalTimeSeconds = 0;
+  let totalDistanceM = 0;
+  const profileData: ProfilePointData[] = [];
+  let totalPowerPercent = 0;
+
+  // Calculate time for each segment and build profile data
+  for (let i = 0; i < profile.length; i++) {
+    const point = profile[i];
+    const oxygenPercent = calculateOxygenPercent(point.elevation);
+    const powerPercent = calculateAltitudePowerPercent(point.elevation);
+    const effectivePowerAtPoint = powerWatts * (powerPercent / 100);
+
+    // Calculate speed at this point using its gradient and elevation
+    const airDensity = calculateAirDensity(point.elevation, temperatureC);
+    const effectivePowerWithLosses = powerWatts * PHYSICS.EFFICIENCY * (powerPercent / 100);
+    const velocityAtPoint = calculateSegmentVelocity(effectivePowerWithLosses, totalMassKg, point.gradient, airDensity);
+    const speedKmh = velocityAtPoint * CONVERSIONS.MPS_TO_KMH;
+
+    profileData.push({
+      distance: point.distance,
+      elevation: point.elevation,
+      gradient: point.gradient,
+      oxygenPercent,
+      powerPercent,
+      effectivePower: effectivePowerAtPoint,
+      speedKmh
+    });
+
+    // Calculate segment time (for segments between points)
+    if (i < profile.length - 1) {
+      const p2 = profile[i + 1];
+      const segmentDistanceM = (p2.distance - point.distance) * 1000;
+      const avgElevation = (point.elevation + p2.elevation) / 2;
+      const segmentGradient = (point.gradient + p2.gradient) / 2;
+
+      const segmentAirDensity = calculateAirDensity(avgElevation, temperatureC);
+      const segmentPowerPercent = calculateAltitudePowerPercent(avgElevation);
+      totalPowerPercent += segmentPowerPercent;
+
+      const segmentEffectivePower = powerWatts * PHYSICS.EFFICIENCY * (segmentPowerPercent / 100);
+      const segmentVelocity = calculateSegmentVelocity(segmentEffectivePower, totalMassKg, segmentGradient, segmentAirDensity);
+      const segmentTime = segmentDistanceM / segmentVelocity;
+
+      totalTimeSeconds += segmentTime;
+      totalDistanceM += segmentDistanceM;
+    }
+  }
+
+  const avgSpeedKmh = (totalDistanceM / totalTimeSeconds) * CONVERSIONS.MPS_TO_KMH;
+  const avgVelocity = totalDistanceM / totalTimeSeconds;
+  const vam = calculateVAM(climb.elevation, totalTimeSeconds);
+  const avgPowerPercent = totalPowerPercent / (profile.length - 1);
+
+  return {
+    timeSeconds: totalTimeSeconds,
+    avgSpeedKmh,
+    velocity: avgVelocity,
+    vam,
+    profileData,
+    avgPowerPercent
+  };
 }
 
 // ===== GEAR CALCULATIONS =====

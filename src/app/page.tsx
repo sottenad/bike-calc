@@ -29,13 +29,13 @@ export default function Home() {
 
       {/* Rider Stats Section */}
       <RiderStatsSection
-        unit={state.unit}
-        riderWeight={state.riderWeight}
-        bikeWeight={state.bikeWeight}
+        unitSystem={state.unitSystem}
+        riderWeightKg={state.riderWeight}
+        bikeWeightKg={state.bikeWeight}
         power={state.power}
         powerToWeight={derived.powerToWeight}
         powerCategory={derived.powerCategory}
-        onUnitChange={actions.setUnit}
+        onUnitSystemChange={actions.setUnitSystem}
         onRiderWeightChange={actions.setRiderWeight}
         onBikeWeightChange={actions.setBikeWeight}
         onPowerChange={actions.setPower}
@@ -64,6 +64,7 @@ export default function Home() {
           climbResult={derived.climbResult}
           isCustom={isCustomClimb}
           isComplete={isCustomComplete}
+          unitSystem={state.unitSystem}
         />
 
         <FormulaDetails
@@ -84,6 +85,7 @@ export default function Home() {
         gearAnalysis={derived.gearAnalysis}
         onChainringChange={actions.setChainring}
         onCassetteChange={actions.setCassette}
+        unitSystem={state.unitSystem}
       />
 
       {/* FAQ Section for AEO */}

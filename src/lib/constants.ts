@@ -1,4 +1,4 @@
-import type { PowerCategory } from './types';
+import type { PowerCategory, VamCategory } from './types';
 
 // Physics Constants
 export const PHYSICS = {
@@ -36,14 +36,35 @@ export const DEFAULTS = {
   POWER_WATTS: 200,
   CLIMB_ID: 'alpe-dhuez',
   CHAINRING_ID: '50-34',
-  CASSETTE_ID: '11-34'
+  CASSETTE_ID: '11-34',
+  ALTITUDE_M: 0,
+  TEMPERATURE_C: 15
 } as const;
+
+// VAM Categories (Vertical Ascent Meters per hour)
+export const VAM_CATEGORIES: VamCategory[] = [
+  { minVam: 1500, label: 'World-class', textClass: 'text-purple-600 dark:text-purple-400' },
+  { minVam: 1200, label: 'Elite', textClass: 'text-blue-600 dark:text-blue-400' },
+  { minVam: 900, label: 'Competitive', textClass: 'text-green-600 dark:text-green-400' },
+  { minVam: 600, label: 'Recreational', textClass: 'text-yellow-600 dark:text-yellow-400' },
+  { minVam: 0, label: 'Beginner', textClass: 'text-gray-600 dark:text-gray-400' }
+];
 
 // Unit Conversion Factors
 export const CONVERSIONS = {
+  // Weight
   LB_TO_KG: 0.453592,
   KG_TO_LB: 2.20462,
+  // Speed
   MPS_TO_KMH: 3.6,
   KMH_TO_MPH: 0.621371,
+  MPH_TO_KMH: 1.60934,
+  // Distance
+  KM_TO_MI: 0.621371,
+  MI_TO_KM: 1.60934,
+  // Elevation
+  M_TO_FT: 3.28084,
+  FT_TO_M: 0.3048,
+  // Gear calculations
   INCHES_PER_MILE: 63360
 } as const;

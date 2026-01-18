@@ -1,17 +1,17 @@
 'use client';
 
-import type { WeightUnit } from '@/lib/types';
+import type { UnitSystem } from '@/lib/types';
 
 interface UnitToggleProps {
-  unit: WeightUnit;
-  onChange: (unit: WeightUnit) => void;
+  unitSystem: UnitSystem;
+  onChange: (unitSystem: UnitSystem) => void;
 }
 
-export function UnitToggle({ unit, onChange }: UnitToggleProps) {
-  const isLb = unit === 'lb';
+export function UnitToggle({ unitSystem, onChange }: UnitToggleProps) {
+  const isImperial = unitSystem === 'imperial';
 
   const handleToggle = () => {
-    onChange(isLb ? 'kg' : 'lb');
+    onChange(isImperial ? 'metric' : 'imperial');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -23,25 +23,25 @@ export function UnitToggle({ unit, onChange }: UnitToggleProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-sm font-medium ${!isLb ? 'text-orange-500' : 'text-gray-400 dark:text-slate-500'}`}>
-        kg
+      <span className={`text-sm font-medium ${!isImperial ? 'text-orange-500' : 'text-gray-400 dark:text-slate-500'}`}>
+        Metric
       </span>
       <button
         type="button"
         role="switch"
-        aria-checked={isLb}
+        aria-checked={isImperial}
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
         className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-orange-500 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
       >
         <span
           className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-            isLb ? 'translate-x-5' : 'translate-x-0'
+            isImperial ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
       </button>
-      <span className={`text-sm font-medium ${isLb ? 'text-orange-500' : 'text-gray-400 dark:text-slate-500'}`}>
-        lb
+      <span className={`text-sm font-medium ${isImperial ? 'text-orange-500' : 'text-gray-400 dark:text-slate-500'}`}>
+        Imperial
       </span>
     </div>
   );

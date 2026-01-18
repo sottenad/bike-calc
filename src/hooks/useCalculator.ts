@@ -6,7 +6,7 @@ import type {
   CalculatorAction,
   CalculatorDerived,
   Climb,
-  WeightUnit
+  UnitSystem
 } from '@/lib/types';
 
 const STORAGE_KEY = 'cycling-calculator-state';
@@ -28,9 +28,9 @@ import {
   DEFAULT_CASSETTE_ID
 } from '@/lib/data/gearing';
 
-// Default state
+// Default state - weights stored internally in kg
 const defaultState: CalculatorState = {
-  unit: 'kg',
+  unitSystem: 'metric',
   riderWeight: DEFAULTS.RIDER_WEIGHT_KG,
   bikeWeight: DEFAULTS.BIKE_WEIGHT_KG,
   power: DEFAULTS.POWER_WATTS,
@@ -41,7 +41,9 @@ const defaultState: CalculatorState = {
     gradient: null
   },
   selectedChainringId: DEFAULT_CHAINRING_ID,
-  selectedCassetteId: DEFAULT_CASSETTE_ID
+  selectedCassetteId: DEFAULT_CASSETTE_ID,
+  altitude: DEFAULTS.ALTITUDE_M,
+  temperature: DEFAULTS.TEMPERATURE_C
 };
 
 // Load state from localStorage
@@ -52,6 +54,16 @@ function loadState(): CalculatorState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      // Migrate old 'unit' field to new 'unitSystem'
+      if (parsed.unit && !parsed.unitSystem) {
+        parsed.unitSystem = parsed.unit === 'lb' ? 'imperial' : 'metric';
+        // If weights were stored in lb, convert to kg for internal storage
+        if (parsed.unit === 'lb') {
+          parsed.riderWeight = lbToKg(parsed.riderWeight);
+          parsed.bikeWeight = lbToKg(parsed.bikeWeight);
+        }
+        delete parsed.unit;
+      }
       // Merge with defaults to handle any missing fields from older versions
       return { ...defaultState, ...parsed };
     }
@@ -75,15 +87,11 @@ function saveState(state: CalculatorState): void {
 // Reducer
 function calculatorReducer(state: CalculatorState, action: CalculatorAction): CalculatorState {
   switch (action.type) {
-    case 'SET_UNIT': {
-      // Convert weight values when switching units
-      const newUnit = action.unit;
-      const convert = newUnit === 'lb' ? kgToLb : lbToKg;
+    case 'SET_UNIT_SYSTEM': {
+      // Just switch the unit system - weights remain stored in kg internally
       return {
         ...state,
-        unit: newUnit,
-        riderWeight: parseFloat(convert(state.riderWeight).toFixed(1)),
-        bikeWeight: parseFloat(convert(state.bikeWeight).toFixed(1))
+        unitSystem: action.unitSystem
       };
     }
     case 'SET_RIDER_WEIGHT':
@@ -122,6 +130,10 @@ function calculatorReducer(state: CalculatorState, action: CalculatorAction): Ca
       return { ...state, selectedChainringId: action.id };
     case 'SET_CASSETTE':
       return { ...state, selectedCassetteId: action.id };
+    case 'SET_ALTITUDE':
+      return { ...state, altitude: action.altitude };
+    case 'SET_TEMPERATURE':
+      return { ...state, temperature: action.temperature };
     default:
       return state;
   }
@@ -129,9 +141,9 @@ function calculatorReducer(state: CalculatorState, action: CalculatorAction): Ca
 
 // Compute derived values
 function computeDerived(state: CalculatorState): CalculatorDerived {
-  // Convert weights to kg for calculations
-  const riderWeightKg = state.unit === 'kg' ? state.riderWeight : lbToKg(state.riderWeight);
-  const bikeWeightKg = state.unit === 'kg' ? state.bikeWeight : lbToKg(state.bikeWeight);
+  // Weights are stored internally in kg
+  const riderWeightKg = state.riderWeight;
+  const bikeWeightKg = state.bikeWeight;
   const totalMassKg = riderWeightKg + bikeWeightKg;
 
   // Power to weight
@@ -157,13 +169,14 @@ function computeDerived(state: CalculatorState): CalculatorDerived {
     selectedClimb = PRESET_CLIMBS[state.selectedClimbId] || null;
   }
 
-  // Climb result
+  // Climb result (altitude effects are calculated segment-by-segment based on elevation profile)
   let climbResult = null;
-  let avgSpeedKmh = 0;
   if (selectedClimb) {
-    climbResult = calculateClimbTime(state.power, totalMassKg, selectedClimb);
-    avgSpeedKmh = climbResult.avgSpeedKmh;
+    climbResult = calculateClimbTime(state.power, totalMassKg, selectedClimb, state.temperature);
   }
+
+  // Average speed for gear analysis
+  const avgSpeedKmh = climbResult?.avgSpeedKmh || 0;
 
   // Gear analysis
   const chainring = getChainringById(state.selectedChainringId);
@@ -198,7 +211,7 @@ export function useCalculator() {
   }, [state]);
 
   const actions = {
-    setUnit: (unit: WeightUnit) => dispatch({ type: 'SET_UNIT', unit }),
+    setUnitSystem: (unitSystem: UnitSystem) => dispatch({ type: 'SET_UNIT_SYSTEM', unitSystem }),
     setRiderWeight: (weight: number) => dispatch({ type: 'SET_RIDER_WEIGHT', weight }),
     setBikeWeight: (weight: number) => dispatch({ type: 'SET_BIKE_WEIGHT', weight }),
     setPower: (power: number) => dispatch({ type: 'SET_POWER', power }),
@@ -206,7 +219,9 @@ export function useCalculator() {
     setCustomClimbField: (field: 'distance' | 'elevation' | 'gradient', value: number | null) =>
       dispatch({ type: 'SET_CUSTOM_CLIMB_FIELD', field, value }),
     setChainring: (id: string) => dispatch({ type: 'SET_CHAINRING', id }),
-    setCassette: (id: string) => dispatch({ type: 'SET_CASSETTE', id })
+    setCassette: (id: string) => dispatch({ type: 'SET_CASSETTE', id }),
+    setAltitude: (altitude: number) => dispatch({ type: 'SET_ALTITUDE', altitude }),
+    setTemperature: (temperature: number) => dispatch({ type: 'SET_TEMPERATURE', temperature })
   };
 
   return { state, derived, actions };

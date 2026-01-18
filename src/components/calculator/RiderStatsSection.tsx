@@ -1,59 +1,78 @@
 'use client';
 
 import { Card, CardTitle, NumberInput, UnitToggle } from '@/components/ui';
-import type { WeightUnit } from '@/lib/types';
+import type { UnitSystem } from '@/lib/types';
+import { kgToLb, lbToKg } from '@/lib/calculations';
 
 interface RiderStatsSectionProps {
-  unit: WeightUnit;
-  riderWeight: number;
-  bikeWeight: number;
+  unitSystem: UnitSystem;
+  riderWeightKg: number;  // Internal weight in kg
+  bikeWeightKg: number;   // Internal weight in kg
   power: number;
   powerToWeight: number;
   powerCategory: string;
-  onUnitChange: (unit: WeightUnit) => void;
-  onRiderWeightChange: (weight: number) => void;
-  onBikeWeightChange: (weight: number) => void;
+  onUnitSystemChange: (unitSystem: UnitSystem) => void;
+  onRiderWeightChange: (weightKg: number) => void;  // Expects kg
+  onBikeWeightChange: (weightKg: number) => void;   // Expects kg
   onPowerChange: (power: number) => void;
 }
 
 export function RiderStatsSection({
-  unit,
-  riderWeight,
-  bikeWeight,
+  unitSystem,
+  riderWeightKg,
+  bikeWeightKg,
   power,
   powerToWeight,
   powerCategory,
-  onUnitChange,
+  onUnitSystemChange,
   onRiderWeightChange,
   onBikeWeightChange,
   onPowerChange
 }: RiderStatsSectionProps) {
+  const isImperial = unitSystem === 'imperial';
+  const weightSuffix = isImperial ? 'lb' : 'kg';
+
+  // Convert display values based on unit system
+  const displayRiderWeight = isImperial ? kgToLb(riderWeightKg) : riderWeightKg;
+  const displayBikeWeight = isImperial ? kgToLb(bikeWeightKg) : bikeWeightKg;
+
+  // Handle weight changes - convert to kg before passing up
+  const handleRiderWeightChange = (displayWeight: number) => {
+    const weightKg = isImperial ? lbToKg(displayWeight) : displayWeight;
+    onRiderWeightChange(weightKg);
+  };
+
+  const handleBikeWeightChange = (displayWeight: number) => {
+    const weightKg = isImperial ? lbToKg(displayWeight) : displayWeight;
+    onBikeWeightChange(weightKg);
+  };
+
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
         <CardTitle className="mb-0">Rider Stats</CardTitle>
-        <UnitToggle unit={unit} onChange={onUnitChange} />
+        <UnitToggle unitSystem={unitSystem} onChange={onUnitSystemChange} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <NumberInput
           id="riderWeight"
           label="Rider Weight"
-          value={riderWeight}
-          onChange={onRiderWeightChange}
-          suffix={unit}
-          min={30}
-          max={200}
+          value={Math.round(displayRiderWeight * 10) / 10}
+          onChange={handleRiderWeightChange}
+          suffix={weightSuffix}
+          min={isImperial ? 66 : 30}
+          max={isImperial ? 440 : 200}
           step={0.1}
         />
         <NumberInput
           id="bikeWeight"
           label="Bike Weight"
-          value={bikeWeight}
-          onChange={onBikeWeightChange}
-          suffix={unit}
-          min={3}
-          max={30}
+          value={Math.round(displayBikeWeight * 10) / 10}
+          onChange={handleBikeWeightChange}
+          suffix={weightSuffix}
+          min={isImperial ? 7 : 3}
+          max={isImperial ? 66 : 30}
           step={0.1}
         />
         <NumberInput

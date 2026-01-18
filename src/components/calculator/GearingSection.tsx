@@ -4,8 +4,9 @@ import { Collapsible, Select } from '@/components/ui';
 import { SmallCollapsible } from '@/components/ui/Collapsible';
 import { GearTable } from './GearTable';
 import { GearLegend } from './GearLegend';
-import type { GearAnalysis } from '@/lib/types';
+import type { GearAnalysis, UnitSystem } from '@/lib/types';
 import { CHAINRINGS, CASSETTES } from '@/lib/data/gearing';
+import { kmhToMph } from '@/lib/calculations';
 
 interface GearingSectionProps {
   speedKmh: number;
@@ -14,6 +15,7 @@ interface GearingSectionProps {
   gearAnalysis: GearAnalysis[];
   onChainringChange: (id: string) => void;
   onCassetteChange: (id: string) => void;
+  unitSystem: UnitSystem;
 }
 
 export function GearingSection({
@@ -22,8 +24,12 @@ export function GearingSection({
   selectedCassetteId,
   gearAnalysis,
   onChainringChange,
-  onCassetteChange
+  onCassetteChange,
+  unitSystem
 }: GearingSectionProps) {
+  const isImperial = unitSystem === 'imperial';
+  const displaySpeed = isImperial ? kmhToMph(speedKmh) : speedKmh;
+  const speedUnit = isImperial ? 'mph' : 'km/h';
   // Build options for dropdowns
   const chainringOptions = CHAINRINGS.map(c => ({ value: c.id, label: c.label }));
   const cassetteOptions = CASSETTES.map(c => ({ value: c.id, label: c.label }));
@@ -52,7 +58,7 @@ export function GearingSection({
       {speedKmh > 0 ? (
         <>
           <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-            At your estimated speed of <span className="font-medium text-gray-900 dark:text-white">{speedKmh.toFixed(1)} km/h</span>,
+            At your estimated speed of <span className="font-medium text-gray-900 dark:text-white">{displaySpeed.toFixed(1)} {speedUnit}</span>,
             here&apos;s how each gear in your small chainring would perform:
           </p>
 
